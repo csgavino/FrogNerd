@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -18,6 +17,8 @@ import com.android.volley.VolleyError;
 import com.android.volley.toolbox.Volley;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import neo.com.frognerd.api.BaseRequest;
 import neo.com.frognerd.model.Croak;
@@ -25,13 +26,12 @@ import neo.com.frognerd.model.Frog;
 
 public class MainActivity extends Activity implements Response.Listener<Frog>, Response.ErrorListener {
     private static final String TAG = "MainActivity";
-    private static final String BASE_PATH = Environment.getExternalStorageDirectory().getAbsolutePath();
 
     private MediaPlayer mPlayer = null;
-    private FrogRecorder mRecorder = null;
-
     private RequestQueue mRequestQueue;
     private RadioGroup mRadioGroup;
+
+    private Map<String, FrogRecorder> frogRecorderMap;
 
     private View.OnClickListener playCallback = new View.OnClickListener() {
         private boolean mStartPlaying = true;
@@ -74,10 +74,18 @@ public class MainActivity extends Activity implements Response.Listener<Frog>, R
         }
     };
 
-    private String getOutputFile() {
+    private String getRecorderKey() {
         int selectedRadio = mRadioGroup.getCheckedRadioButtonId();
         RadioButton radioButton = (RadioButton) findViewById(selectedRadio);
         return radioButton.getText().toString();
+    }
+
+    private FrogRecorder getRecorder() {
+        return frogRecorderMap.get(getRecorderKey());
+    }
+
+    private String getOutputFile() {
+        return getRecorder().getOutputFile();
     }
 
     @Override
@@ -92,16 +100,41 @@ public class MainActivity extends Activity implements Response.Listener<Frog>, R
         ((Button) findViewById(R.id.recordBtn)).setOnClickListener(recordCallback);
         ((Button) findViewById(R.id.sendBtn)).setOnClickListener(sendCallback);
 
+        setupRecorders();
+        setupRadioGroup();
+    }
+
+    private void setupRecorders() {
+        frogRecorderMap = new HashMap<>();
+        frogRecorderMap.put("spotted_tree_frog",
+                FrogRecorder.getInstance("spotted_tree_frog",
+                        MediaRecorder.OutputFormat.THREE_GPP,
+                        MediaRecorder.AudioEncoder.AMR_WB));
+
+        frogRecorderMap.put("mpeg_4_amr_nb",
+                FrogRecorder.getInstance("mpeg_4_amr_nb",
+                        MediaRecorder.OutputFormat.MPEG_4,
+                        MediaRecorder.AudioEncoder.AMR_NB));
+
+        frogRecorderMap.put("mpeg_4_default",
+                FrogRecorder.getInstance("mpeg_4_default",
+                        MediaRecorder.OutputFormat.MPEG_4,
+                        MediaRecorder.AudioEncoder.DEFAULT));
+
+        frogRecorderMap.put("three_gpp_amr_nb",
+                FrogRecorder.getInstance("three_gpp_amr_nb",
+                        MediaRecorder.OutputFormat.THREE_GPP,
+                        MediaRecorder.AudioEncoder.AMR_NB));
+
+        frogRecorderMap.put("three_gpp_amr_wb",
+                FrogRecorder.getInstance("three_gpp_amr_wb",
+                        MediaRecorder.OutputFormat.THREE_GPP,
+                        MediaRecorder.AudioEncoder.AMR_WB));
+    }
+
+    private void setupRadioGroup() {
         mRadioGroup = (RadioGroup) findViewById(R.id.radioGroup);
-
-        String[] radioBtns = new String[]{
-                BaseRequest.buildPath(BASE_PATH, "three_gpp_aac_eld"),
-                BaseRequest.buildPath(BASE_PATH, "mpeg_4_amr_mb"),
-                BaseRequest.buildPath(BASE_PATH, "mpeg_4_amr_nb"), /* works */
-                BaseRequest.buildPath(BASE_PATH, "mpeg_4_default"), /* works */
-        };
-
-        for (String radioBtnText : radioBtns) {
+        for (String radioBtnText : frogRecorderMap.keySet()) {
             RadioButton radioBtn = new RadioButton(this);
             radioBtn.setText(radioBtnText);
             mRadioGroup.addView(radioBtn);
@@ -111,9 +144,9 @@ public class MainActivity extends Activity implements Response.Listener<Frog>, R
     @Override
     public void onPause() {
         super.onPause();
-        if (mRecorder != null) {
-            mRecorder.release();
-            mRecorder = null;
+        FrogRecorder frogRecorder = getRecorder();
+        if (frogRecorder != null) {
+            frogRecorder.release();
         }
 
         if (mPlayer != null) {
@@ -141,6 +174,7 @@ public class MainActivity extends Activity implements Response.Listener<Frog>, R
     private void startPlaying() {
         mPlayer = new MediaPlayer();
         try {
+            Log.d("TEST", "Playing " + getOutputFile());
             mPlayer.setDataSource(getOutputFile());
             mPlayer.prepare();
             mPlayer.start();
@@ -213,10 +247,10 @@ public class MainActivity extends Activity implements Response.Listener<Frog>, R
 //                MediaRecorder.AudioEncoder.AMR_WB);
 //
 // Okay
-        mRecorder = FrogRecorder.getInstance(
-                "mpeg_4_default",
-                MediaRecorder.OutputFormat.MPEG_4,
-                MediaRecorder.AudioEncoder.DEFAULT);
+//        mRecorder = FrogRecorder.getInstance(
+//                "mpeg_4_default",
+//                MediaRecorder.OutputFormat.MPEG_4,
+//                MediaRecorder.AudioEncoder.DEFAULT);
 //
 // Doesn't work
 //        mRecorder = FrogRecorder.getInstance(
@@ -267,7 +301,7 @@ public class MainActivity extends Activity implements Response.Listener<Frog>, R
 
 
         try {
-            mRecorder.start();
+            getRecorder().start();
         } catch (IOException e) {
             Log.e(TAG, "Failed to start mediaRecorder", e);
         }
@@ -275,7 +309,7 @@ public class MainActivity extends Activity implements Response.Listener<Frog>, R
     }
 
     private void stopRecording() {
-        mRecorder.cleanup();
+        getRecorder().cleanup();
         submitRecording();
     }
 
